@@ -30,8 +30,13 @@ class AdaptiveAcquisition(UpperConfidenceBound):
             kappa_decay: kappa衰减系数（每次迭代后 kappa *= kappa_decay）
             random_state: 随机种子
         """
-        super().__init__(kappa=kappa, kappa_decay=kappa_decay, 
-                        kappa_decay_delay=0, random_state=random_state)
+        # 注意：UpperConfidenceBound 使用 exploration_decay 而不是 kappa_decay
+        super().__init__(
+            kappa=kappa, 
+            exploration_decay=kappa_decay,  # 修正：使用正确的参数名
+            exploration_decay_delay=0,      # 修正：使用正确的参数名
+            random_state=random_state
+        )
         
         # 记录历史
         self.iteration = 0
@@ -41,6 +46,7 @@ class AdaptiveAcquisition(UpperConfidenceBound):
         # 初始kappa
         self.initial_kappa = kappa
         self.current_kappa = kappa
+        self.kappa_decay = kappa_decay  # 保存衰减系数
         
         print(f"AdaptiveAcquisition初始化完成")
         print(f"  初始kappa: {kappa}")
@@ -59,13 +65,19 @@ class AdaptiveAcquisition(UpperConfidenceBound):
         
         print(f"  [迭代{self.iteration}] kappa调整: {old_kappa:.3f} -> {new_kappa:.3f}")
     
-    def adjust_exploration(self, mode='auto'):
+    def adjust_exploration(self, mode='auto', record_history=True):
         """
         调整探索策略
         
         参数:
             mode: 'explore' (增加探索), 'exploit' (增加利用), 'auto' (自动)
+            record_history: 是否记录历史（测试时设为True）
         """
+        # 如果是测试模式，记录历史
+        if record_history and self.iteration == 0:
+            self.iteration += 1
+            self.kappa_history.append(self.current_kappa)
+        
         if mode == 'explore':
             # 增加探索：kappa变大
             new_kappa = min(self.current_kappa * 1.5, 5.0)
@@ -78,6 +90,10 @@ class AdaptiveAcquisition(UpperConfidenceBound):
             # 自动衰减
             new_kappa = self.current_kappa * self.kappa_decay
             self.update_kappa(new_kappa)
+        
+        # 记录调整后的kappa
+        if record_history:
+            self.kappa_history.append(self.current_kappa)
     
     def suggest(self, gp, target_space, n_random=10000, n_l_bfgs_b=10, fit_gp=True):
         """

@@ -11,7 +11,11 @@ from bayes_opt.domain_reduction import SequentialDomainReductionTransformer
 from bayes_opt.logger import JSONLogger, ScreenLogger
 from bayes_opt.target_space import TargetSpace
 
-__version__ = importlib.metadata.version("bayesian-optimization")
+# 尝试获取版本，如果失败则使用默认版本
+try:
+    __version__ = importlib.metadata.version("bayesian-optimization")
+except importlib.metadata.PackageNotFoundError:
+    __version__ = "dev"  # 开发版本
 
 
 __all__ = [

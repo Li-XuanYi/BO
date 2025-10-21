@@ -2,7 +2,7 @@
 LLMBO优化器（完整版本）
 集成三个策略：
 1. LLM Warm Start
-2. LLM增强的复合核函数
+2. LLM增强的复合核函数（带动态γ）
 3. LLM动态采样策略
 """
 
@@ -10,7 +10,7 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from bayes_opt import BayesianOptimization
+from bayes_opt import BayesianOptimization, Events
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import Matern
 from llm_utils import WarmStartGenerator
@@ -25,13 +25,31 @@ import time
 import numpy as np
 
 
+class GammaUpdater:
+    """
+    γ更新器（用于事件订阅）
+    """
+    def __init__(self, optimizer_instance):
+        self.optimizer_instance = optimizer_instance
+    
+    def update(self, event, instance):
+        """
+        BayesianOptimization的事件回调接口
+        
+        参数:
+            event: 事件类型
+            instance: BayesianOptimization实例
+        """
+        self.optimizer_instance._update_coupling_strength_internal(event, instance)
+
+
 class LLMBOOptimizer:
     """
     LLM增强的贝叶斯优化器（完整版本）
     
     实现三个策略：
     - 策略1: LLM Warm Start（生成优质初始点）
-    - 策略2: LLM增强核函数（改进GP建模）
+    - 策略2: LLM增强核函数（改进GP建模）+ 动态γ调整
     - 策略3: LLM动态采样（动态调整探索策略）
     """
     
@@ -77,9 +95,16 @@ class LLMBOOptimizer:
         
         # 策略2: 增强核函数配置
         self.kernel_config = get_llm_kernel_config() if use_enhanced_kernel else None
+        self.enhanced_kernel = None  # 保存核函数实例
         
         # 策略3: 动态采样策略
         self.dynamic_sampling = DynamicSamplingStrategy(llm_model=llm_model) if use_dynamic_sampling else None
+        
+        # 迭代计数器（用于γ更新）
+        self.iteration_count = 0
+        
+        # γ更新器（用于事件订阅）
+        self.gamma_updater = GammaUpdater(self)
         
         print("LLMBO优化器初始化完成")
         print(f"  LLM模型: {llm_model}")
@@ -97,18 +122,51 @@ class LLMBOOptimizer:
         print("\n配置LLM增强的核函数...")
         
         # 创建增强核函数
-        kernel = LLMEnhancedKernel(
+        self.enhanced_kernel = LLMEnhancedKernel(
             length_scales=self.kernel_config['length_scales'],
             coupling_matrix=self.kernel_config['coupling_matrix'],
             coupling_strength=self.kernel_config['coupling_strength']
         )
         
         # 设置到GP中
-        self.optimizer._gp.kernel = kernel
+        self.optimizer._gp.kernel = self.enhanced_kernel
         
         print("  核函数已配置")
         print(f"  Length scales: {self.kernel_config['length_scales']}")
         print(f"  Coupling strength: {self.kernel_config['coupling_strength']}")
+    
+    def _update_coupling_strength_internal(self, event, instance):
+        """
+        更新核函数的耦合强度γ（内部方法）
+        
+        这个方法会在每次BO迭代后被自动调用
+        
+        参数:
+            event: 事件类型
+            instance: BayesianOptimization实例
+        """
+        if not self.use_enhanced_kernel or self.enhanced_kernel is None:
+            return
+        
+        # 增加迭代计数
+        self.iteration_count += 1
+        
+        # 跳过初始点
+        if self.iteration_count <= len(instance.space) - len(instance.res):
+            return
+        
+        # 获取当前最优目标值
+        if len(instance.res) > 0:
+            current_best = instance.max['target']
+            
+            # 调用核函数的update_gamma方法
+            # 每5次迭代打印一次
+            verbose = (self.iteration_count % 5 == 1)
+            gamma = self.enhanced_kernel.update_gamma(
+                current_f_min=current_best,
+                iteration=self.iteration_count - 1,
+                verbose=verbose
+            )
     
     def _get_dynamic_sampling_guidance(self, iteration: int) -> Dict:
         """
@@ -141,7 +199,7 @@ class LLMBOOptimizer:
         use_llm_warm_start: bool = True
     ):
         """
-        执行优化
+        执行优化（保持原有结构 + 添加γ更新事件）
         
         参数:
             init_points: 初始探索点数
@@ -168,23 +226,26 @@ class LLMBOOptimizer:
             
             print(f"已添加{init_points}个LLM初始点到队列")
         
-        # 配置增强核函数
+        # 阶段2: 配置增强核函数
         if self.use_enhanced_kernel:
             print("\n[阶段2] 配置增强核函数")
             print("-"*70)
             self._setup_enhanced_kernel()
+            
+            # 【关键改动】订阅优化步骤事件，每次迭代后更新γ
+            self.optimizer.subscribe(Events.OPTIMIZATION_STEP, self.gamma_updater)
+            print("  已启用动态γ调整（每次迭代后自动更新）")
         
         # 阶段3: 贝叶斯优化主循环
         print(f"\n[阶段3] 贝叶斯优化迭代 (n_iter={n_iter})")
         print("-"*70)
         
-        # 执行初始点评估 + 贝叶斯优化迭代
+        # 检查是否需要动态采样分析
         for iter_num in range(n_iter):
-            # 检查是否需要动态采样分析
             if self.use_dynamic_sampling:
                 guidance = self._get_dynamic_sampling_guidance(iter_num + init_points)
         
-        # 运行优化（init_points=0因为已经用probe添加）
+        # 【保持原有调用方式】运行优化（init_points=0因为已经用probe添加）
         self.optimizer.maximize(init_points=0, n_iter=(init_points + n_iter))
         
         # 计算总时间
@@ -196,6 +257,21 @@ class LLMBOOptimizer:
         print("="*70)
         print(f"总评估次数: {len(self.optimizer.space)}")
         print(f"总耗时: {total_time:.2f} 秒")
+        
+        # 显示γ变化历史
+        if self.enhanced_kernel:
+            history = self.enhanced_kernel.get_gamma_history()
+            print(f"\n策略2: γ动态调整统计")
+            print("-"*70)
+            print(f"  初始γ: {history['gamma_history'][0]:.4f}")
+            print(f"  最终γ: {history['gamma_history'][-1]:.4f}")
+            print(f"  变化幅度: {(history['gamma_history'][-1] - history['gamma_history'][0]):.4f}")
+            if len(history['gamma_history']) > 10:
+                print(f"  γ轨迹: [{', '.join([f'{g:.3f}' for g in history['gamma_history'][:3]])}] ... "
+                      f"[{', '.join([f'{g:.3f}' for g in history['gamma_history'][-3:]])}]")
+            else:
+                print(f"  γ轨迹: [{', '.join([f'{g:.3f}' for g in history['gamma_history']])}]")
+        
         print(f"\n最优结果:")
         print(f"  目标值: {self.optimizer.max['target']:.2f}")
         print(f"  充电步数: {-self.optimizer.max['target']:.0f} 步")
@@ -222,7 +298,7 @@ if __name__ == "__main__":
     import numpy as np
     
     def charging_time_compute(current1, charging_number, current2):
-        """两阶段充电目标函数"""
+        """两阶段充电目标函数（保持原样）"""
         env = SPM(3.0, 298)
         done = False
         i = 0
@@ -269,4 +345,4 @@ if __name__ == "__main__":
         init_points=5,
         n_iter=5,
         use_llm_warm_start=True
-    )
+    ) 

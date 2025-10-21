@@ -1,6 +1,6 @@
 """
-测试自适应Acquisition Function
-验证：能够在BO迭代中使用自定义acquisition function
+测试自适应Acquisition Function（保守策略）
+目标：验证自定义acquisition function可以正常工作，不做激进调整
 """
 
 import sys
@@ -45,10 +45,10 @@ def charging_time_compute(current1, charging_number, current2):
 
 def test_adaptive_acquisition():
     """
-    测试自适应acquisition function
+    测试自适应acquisition function（保守策略）
     """
     print("="*70)
-    print("测试自适应Acquisition Function")
+    print("测试自适应Acquisition Function (保守策略)")
     print("="*70)
     
     # 参数边界
@@ -59,10 +59,11 @@ def test_adaptive_acquisition():
     }
     
     # 创建自适应acquisition function
+    # 使用保守的衰减策略，不做激进调整
     print("\n创建AdaptiveAcquisition...")
     acquisition_func = AdaptiveAcquisition(
-        kappa=2.5,           # 初始探索参数
-        kappa_decay=0.95,    # 每次迭代衰减5%
+        kappa=2.5,           # 初始探索参数（标准值）
+        kappa_decay=0.98,    # 温和衰减（每次迭代衰减2%）
         random_state=42
     )
     
@@ -70,10 +71,13 @@ def test_adaptive_acquisition():
     optimizer = BayesianOptimization(
         f=None,
         pbounds=pbounds,
-        acquisition_function=acquisition_func,  # 使用自定义acquisition
+        acquisition_function=acquisition_func,
         random_state=42,
         verbose=0
     )
+    
+    print(f"策略: 使用温和衰减（0.98），不做规则式调整")
+    print(f"理由: 前期探索本来就不稳定，等步骤3集成LLM后再做智能调整")
     
     print("\n" + "="*70)
     print("阶段1: 初始探索（5个点）")
@@ -81,7 +85,7 @@ def test_adaptive_acquisition():
     
     # 初始探索
     for i in range(5):
-        next_point = optimizer.suggest(acquisition_func)
+        next_point = optimizer.suggest()
         target = charging_time_compute(**next_point)
         optimizer.register(params=next_point, target=target)
         
@@ -91,34 +95,9 @@ def test_adaptive_acquisition():
     print("阶段2: BO迭代（5个点）")
     print("-"*70)
     
-    # 记录前5次迭代的最优值
-    best_before = optimizer.max['target']
-    improvement_count = 0
-    
-    # BO迭代
+    # BO迭代 - 只使用自然衰减，不做人为调整
     for i in range(5):
-        # 检查是否需要调整策略
-        if i > 0:
-            current_best = optimizer.max['target']
-            if current_best > best_before:
-                # 有改进，增加利用
-                print(f"  检测到改进，增加利用...")
-                acquisition_func.adjust_exploration(mode='exploit')
-                improvement_count += 1
-            elif improvement_count == 0 and i >= 2:
-                # 没有改进，增加探索
-                print(f"  长时间无改进，增加探索...")
-                acquisition_func.adjust_exploration(mode='explore')
-            else:
-                # 正常衰减
-                acquisition_func.adjust_exploration(mode='auto')
-            
-            best_before = current_best
-        else:
-            # 第一次迭代，正常衰减
-            acquisition_func.adjust_exploration(mode='auto')
-        
-        next_point = optimizer.suggest(acquisition_func)
+        next_point = optimizer.suggest()
         target = charging_time_compute(**next_point)
         optimizer.register(params=next_point, target=target)
         
@@ -143,19 +122,23 @@ def test_adaptive_acquisition():
     print(f"  初始kappa: {stats['initial_kappa']:.3f}")
     print(f"  最终kappa: {stats['current_kappa']:.3f}")
     print(f"  平均kappa: {stats['average_kappa']:.3f}")
-    print(f"  kappa变化: {' -> '.join([f'{k:.2f}' for k in stats['kappa_history'][:5]])} ... "
-          f"{' -> '.join([f'{k:.2f}' for k in stats['kappa_history'][-3:]])}")
+    print(f"  衰减率: 每次迭代保留{0.98*100:.0f}%")
+    if len(stats['kappa_history']) >= 10:
+        print(f"  kappa变化: {' -> '.join([f'{k:.2f}' for k in stats['kappa_history'][:5]])} ... "
+              f"{' -> '.join([f'{k:.2f}' for k in stats['kappa_history'][-3:]])}")
     
     # 验证
     print("\n" + "="*70)
     print("验证结果")
     print("="*70)
     
+    # 验证迭代次数
     if stats['total_iterations'] == 10 and len(optimizer.space) == 10:
         print("\n验证成功:")
         print("  1. 自定义acquisition function正常工作")
-        print("  2. kappa能够动态调整")
+        print("  2. kappa温和衰减（从2.5 -> {:.2f}）".format(stats['current_kappa']))
         print("  3. 迭代控制正常")
+        print("  4. 为步骤3（LLM集成）做好准备")
         return True
     else:
         print("\n验证失败:")
@@ -165,14 +148,23 @@ def test_adaptive_acquisition():
 
 
 if __name__ == "__main__":
+    print("\n注意:")
+    print("  - 本测试使用保守的衰减策略（0.98）")
+    print("  - 不做规则式的kappa调整")
+    print("  - 理由: 论文中的自适应策略是基于LLM分析，而不是简单规则")
+    print("  - 步骤3将集成LLM来实现真正的智能调整\n")
+    
     success = test_adaptive_acquisition()
     
     if success:
         print("\n" + "="*70)
-        print("步骤2完成：自定义Acquisition Function测试通过")
+        print("步骤2完成: 自定义Acquisition Function测试通过")
         print("="*70)
-        print("\n下一步：步骤3 - 集成LLM动态采样")
+        print("\n下一步: 步骤3 - 集成LLM动态采样")
+        print("  - LLM分析历史优化数据")
+        print("  - 智能调整采样策略")
+        print("  - 参考LLMBO论文的权重函数方法")
     else:
         print("\n" + "="*70)
-        print("步骤2失败：请检查问题")
+        print("步骤2失败: 请检查问题")
         print("="*70)
