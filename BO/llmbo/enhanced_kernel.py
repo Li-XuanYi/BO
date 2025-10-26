@@ -52,12 +52,12 @@ class LLMEnhancedKernel(Kernel):
         self.adaptation_rate = adaptation_rate
         self.use_llm_guidance = use_llm_guidance
         self.llm_model = llm_model
-        
+       
         # 实例ID (用于识别主kernel)
         self.instance_id = str(uuid.uuid4())
         
         self.base_kernel = Matern(nu=nu, length_scale=self.length_scales)
-        
+        self.gradient_cache = {}  # 新增: 梯度缓存
         # 只在第一次创建时初始化LLM advisor
         if use_llm_guidance and LLMEnhancedKernel._global_llm_advisor is None and not LLMEnhancedKernel._advisor_lock:
             LLMEnhancedKernel._advisor_lock = True
@@ -186,6 +186,7 @@ class LLMEnhancedKernel(Kernel):
             'gamma_history': LLMEnhancedKernel._global_gamma_history,
             'f_min_history': LLMEnhancedKernel._global_f_min_history
         }
+    
     
     def reset_gamma(self):
         """重置gamma到初始值"""
