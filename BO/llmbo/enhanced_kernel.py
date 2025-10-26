@@ -123,11 +123,14 @@ class LLMEnhancedKernel(Kernel):
         
         # 判断是否咨询LLM
         llm_advisor = LLMEnhancedKernel._global_llm_advisor
+        
+        # 临时workaround: 直接检查每3次迭代
         should_consult_llm = (
             self.use_llm_guidance and 
             llm_advisor is not None and 
             optimization_history is not None and
-            llm_advisor.should_consult_llm(iteration)
+            iteration > 0 and
+            iteration % 3 == 0  # 强制每3次
         )
         
         if should_consult_llm:
@@ -144,12 +147,13 @@ class LLMEnhancedKernel(Kernel):
             gamma_llm = llm_advice.get('recommended_gamma', gamma_formula)
             confidence = llm_advice.get('confidence', 'medium')
             
+            # 修改: 提高LLM权重,加强LLM参与
             if confidence == 'high':
-                weight_llm = 0.7
+                weight_llm = 0.8  # 原来0.7,提高到0.8
             elif confidence == 'medium':
-                weight_llm = 0.5
+                weight_llm = 0.7  # 原来0.5,提高到0.7
             else:
-                weight_llm = 0.3
+                weight_llm = 0.5  # 原来0.3,提高到0.5
             
             gamma_new = weight_llm * gamma_llm + (1 - weight_llm) * gamma_formula
             gamma_new = np.clip(gamma_new, self.min_gamma, self.max_gamma)

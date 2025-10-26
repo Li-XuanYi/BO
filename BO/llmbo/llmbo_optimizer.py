@@ -1,9 +1,9 @@
 """
-LLMBO优化器 (核心修复版)
-修复内容:
-1. 修正maximize的n_iter参数错误
-2. 修正gamma更新时机
-3. 优化队列处理逻辑
+LLMBO优化器 (添加充电过程数据记录功能)
+
+新增功能:
+- 记录最优参数的完整充电过程
+- 保存时间序列数据用于可视化
 """
 
 import sys
@@ -20,6 +20,76 @@ except ImportError:
     from dynamic_sampling import DynamicSamplingStrategy
 from typing import Callable, Dict
 import time
+import numpy as np
+
+
+def record_charging_process(charging_func_with_logging, current1, charging_number, current2):
+    """
+    记录完整充电过程的时间序列数据
+    
+    返回:
+        {
+            'time': [t1, t2, ...],
+            'soc': [soc1, soc2, ...],
+            'voltage': [v1, v2, ...],
+            'current': [i1, i2, ...],
+            'temperature': [T1, T2, ...],
+            'total_steps': N
+        }
+    """
+    from SPM import SPM
+    
+    env = SPM(3.0, 298)
+    
+    time_steps = []
+    soc_history = []
+    voltage_history = []
+    current_history = []
+    temp_history = []
+    
+    done = False
+    i = 0
+    t = 0
+    
+    while not done:
+        # 确定当前电流
+        if i < int(charging_number):
+            current = current1
+            if env.voltage >= 4.0:
+                current = current * np.exp(-0.9 * (env.voltage - 4))
+        else:
+            current = current2
+            if env.voltage >= 4.0:
+                current = current * np.exp(-0.9 * (env.voltage - 4))
+        
+        # 记录数据
+        time_steps.append(t)
+        soc_history.append(env.soc * 100)  # 转换为百分比
+        voltage_history.append(env.voltage)
+        current_history.append(current)
+        temp_history.append(env.temp - 273.15)  # 转换为摄氏度
+        
+        # 执行一步
+        _, done, _ = env.step(current)
+        i += 1
+        t += env.sett['sample_time'] / 60  # 转换为分钟
+        
+        if env.voltage > env.sett['constraints voltage max'] or \
+           env.temp > env.sett['constraints temperature max']:
+            i += 1
+        
+        if done:
+            break
+    
+    return {
+        'time': np.array(time_steps),
+        'soc': np.array(soc_history),
+        'voltage': np.array(voltage_history),
+        'current': np.array(current_history),
+        'temperature': np.array(temp_history),
+        'total_steps': i,
+        'total_time': t
+    }
 
 
 class GammaUpdater:
@@ -32,7 +102,7 @@ class GammaUpdater:
 
 
 class LLMBOOptimizer:
-    """LLM增强的贝叶斯优化器 (修复版)"""
+    """LLM增强的贝叶斯优化器 (带数据记录)"""
     
     def __init__(
         self,
@@ -99,25 +169,22 @@ class LLMBOOptimizer:
         print(f"  Coupling strength: {self.kernel_config['coupling_strength']}")
     
     def _update_coupling_strength_internal(self, event, instance):
-        """更新核函数的耦合强度gamma (传递优化历史给LLM)"""
+        """更新核函数的耦合强度gamma"""
         if not self.use_enhanced_kernel or self.enhanced_kernel is None:
             return
         
-        # 修复: 只在有至少2个结果时才更新
         if len(instance.res) < 2:
             return
         
         current_best = instance.max['target']
         iteration = len(instance.res) - 1
         
-        # 每5次打印一次
         verbose = (iteration % 5 == 0)
         
-        # 关键修改: 传递完整优化历史供LLM分析
         self.enhanced_kernel.update_gamma(
             current_f_min=current_best,
             iteration=iteration,
-            optimization_history=instance.res,  # 传递历史数据
+            optimization_history=instance.res,
             verbose=verbose
         )
     
@@ -141,15 +208,11 @@ class LLMBOOptimizer:
         self,
         init_points: int = 5,
         n_iter: int = 30,
-        use_llm_warm_start: bool = True
+        use_llm_warm_start: bool = True,
+        record_best: bool = True  # 新增: 是否记录最优结果
     ):
         """
-        执行优化 (修复版)
-        
-        修复内容:
-        1. 正确的maximize调用: n_iter=n_iter (而非 n_iter=(init_points+n_iter))
-        2. 先评估LLM点,再订阅gamma更新事件
-        3. 动态采样分析逻辑优化
+        执行优化 (修复版 + 数据记录)
         """
         print("\n" + "="*70)
         print("开始LLMBO优化 (修复版)")
@@ -164,7 +227,6 @@ class LLMBOOptimizer:
             
             llm_points = self.warm_start_generator.generate(n_points=init_points)
             
-            # 将LLM生成的点加入优化器队列
             for i, point in enumerate(llm_points, 1):
                 self.optimizer.probe(params=point, lazy=True)
             
@@ -177,32 +239,28 @@ class LLMBOOptimizer:
             self._setup_enhanced_kernel()
             print("  增强核函数已配置")
         
-        # 修复: 先评估LLM初始点
+        # 阶段2.5: 先评估LLM初始点
         print(f"\n[阶段2.5] 评估LLM初始点")
         print("-"*70)
-        # 执行队列中的点(不做额外迭代)
         self.optimizer.maximize(init_points=0, n_iter=0)
         print(f"  已评估 {len(self.optimizer.res)} 个LLM初始点")
         
-        # 修复: 现在才订阅gamma更新事件
+        # 现在订阅gamma更新事件
         if self.use_enhanced_kernel:
             self.optimizer.subscribe(Events.OPTIMIZATION_STEP, self.gamma_updater)
             print("  已启用动态gamma调整")
         
-        # 阶段3: 贝叶斯优化主循环
+        # 阶段3: BO主循环
         print(f"\n[阶段3] 贝叶斯优化迭代 (n_iter={n_iter})")
         print("-"*70)
         
-        # 动态采样分析(每5次迭代)
         for iter_num in range(n_iter):
             if self.use_dynamic_sampling:
                 current_iter = len(self.optimizer.res) + iter_num
                 guidance = self._get_dynamic_sampling_guidance(current_iter)
         
-        # 修复: 正确的n_iter参数
         self.optimizer.maximize(init_points=0, n_iter=n_iter)
         
-        # 计算总时间
         total_time = time.time() - start_time
         
         # 显示结果
@@ -234,7 +292,28 @@ class LLMBOOptimizer:
         for key, value in self.optimizer.max['params'].items():
             print(f"    {key} = {value:.4f}")
         
-        return self.optimizer.max
+        # 新增: 记录最优参数的完整充电过程
+        best_data = None
+        if record_best:
+            print(f"\n记录最优参数的充电过程数据...")
+            best_params = self.optimizer.max['params']
+            best_data = record_charging_process(
+                self.f,
+                current1=best_params['current1'],
+                charging_number=best_params['charging_number'],
+                current2=best_params['current2']
+            )
+            print(f"  已记录 {len(best_data['time'])} 个时间步数据")
+        
+        result = {
+            'optimizer_result': self.optimizer.max,
+            'charging_data': best_data,  # 新增: 充电过程数据
+            'gamma_history': history if self.enhanced_kernel else None,
+            'total_time': total_time,
+            'method': 'LLMBO'
+        }
+        
+        return result
     
     @property
     def max(self):

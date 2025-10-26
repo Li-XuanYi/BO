@@ -64,7 +64,8 @@ def test_llmbo_with_llm_gamma():
     print(f"  初始点数: {init_points} (LLM生成)")
     print(f"  迭代次数: {n_iter}")
     print(f"  总评估次数: {init_points + n_iter} = {init_points + n_iter}")
-    print(f"  LLM Gamma调整: 每5次迭代 (预期在第5次和第10次)")
+    print(f"  LLM Gamma调整: 每3次迭代 (预期在第3,6,9,12,15次)")
+    print(f"  LLM权重策略: 高0.8/中0.7/低0.5 (加强LLM参与)")
     print(f"  参数边界: {pbounds}")
     
     # 创建LLMBO优化器
@@ -84,7 +85,7 @@ def test_llmbo_with_llm_gamma():
         print("成功: LLMBO优化器初始化成功")
     except Exception as e:
         print(f"失败: 初始化失败 - {e}")
-        return False
+        return False, None  # 修复: 返回两个值
     
     # 运行优化
     print("\n" + "-"*70)
@@ -136,7 +137,7 @@ def test_llmbo_with_llm_gamma():
         print(f"\n  详细轨迹:")
         for i, (g, f) in enumerate(zip(history['gamma_history'], history['f_min_history'])):
             marker = ""
-            if i in [5, 10]:
+            if i > 0 and i % 3 == 0:  # 每3次标记
                 marker = " <- LLM咨询点"
             print(f"    Iter {i}: gamma={g:.4f}, f_min={f:.2f}{marker}")
     
@@ -175,22 +176,26 @@ def test_llmbo_with_llm_gamma():
 if __name__ == "__main__":
     print("\n开始测试LLM智能Gamma调整...\n")
     
-    success, results = test_llmbo_with_llm_gamma()
+    result = test_llmbo_with_llm_gamma()
     
-    if success:
-        print("\n测试成功!")
-        print("\n关键观察点:")
-        print("  1. 第5次迭代应该看到 '咨询LLM智能顾问...'")
-        print("  2. 第10次迭代应该再次看到LLM咨询")
-        print("  3. Gamma应该根据LLM建议有明显调整")
-        
-        if results['gamma_history']:
-            gamma_hist = results['gamma_history']['gamma_history']
-            if len(gamma_hist) > 5:
-                gamma_change = gamma_hist[5] - gamma_hist[4]
-                print(f"\n  第5次LLM调整: gamma变化 {gamma_change:+.4f}")
-            if len(gamma_hist) > 10:
-                gamma_change = gamma_hist[10] - gamma_hist[9]
-                print(f"  第10次LLM调整: gamma变化 {gamma_change:+.4f}")
-    else:
+    # 修复: 检查返回值
+    if result is None or (isinstance(result, tuple) and result[0] is False):
         print("\n测试失败,请检查错误信息")
+    elif isinstance(result, tuple):
+        success, results = result
+        if success:
+            print("\n测试成功!")
+            print("\n关键观察点:")
+            print("  1. 第3,6,9次迭代应该看到LLM咨询")
+            print("  2. LLM权重更高 (中置信度0.7,高置信度0.8)")
+            print("  3. Gamma应该有更明显的调整")
+            
+            if results and results.get('gamma_history'):
+                gamma_hist = results['gamma_history']['gamma_history']
+                print("\n  LLM调整记录:")
+                for checkpoint in [3, 6, 9, 12]:
+                    if len(gamma_hist) > checkpoint:
+                        gamma_change = gamma_hist[checkpoint] - gamma_hist[checkpoint-1]
+                        print(f"    第{checkpoint}次: gamma变化 {gamma_change:+.4f}")
+    else:
+        print("\n测试失败,返回值异常")
