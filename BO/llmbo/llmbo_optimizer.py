@@ -50,8 +50,6 @@ class LLMBOOptimizerV2:
         random_state: int = 1,
         use_enhanced_kernel: bool = True,
         use_dynamic_sampling: bool = True,
-        gradient_epsilon: float = 1.0,
-        gradient_cache_size: int = 1000
     ):
         """
         初始化LLMBO优化器V2
