@@ -1,0 +1,280 @@
+{
+  "timestamp": "2025-10-19T10:38:55.338679",
+  "traditional_bo": {
+    "method": "Traditional BO",
+    "init_points": 5,
+    "n_iter": 10,
+    "total_evaluations": 15,
+    "total_time": 564.1421563625336,
+    "best_target": -40.0,
+    "best_params": {
+      "charging_number": 13.836224915215878,
+      "current1": 4.921109372580706,
+      "current2": 4.0
+    },
+    "all_results": [
+      {
+        "target": -112.0,
+        "params": {
+          "charging_number": 13.34044009405148,
+          "current1": 5.160973480326474,
+          "current2": 1.0003431244520347
+        }
+      },
+      {
+        "target": -107.0,
+        "params": {
+          "charging_number": 11.046651452636794,
+          "current1": 3.440267672451339,
+          "current2": 1.2770157843063934
+        }
+      },
+      {
+        "target": -67.0,
+        "params": {
+          "charging_number": 8.725204227553418,
+          "current1": 4.036682181129143,
+          "current2": 2.19030242269201
+        }
+      },
+      {
+        "target": -47.0,
+        "params": {
+          "charging_number": 15.776334680067139,
+          "current1": 4.2575835432098845,
+          "current2": 3.0556585011902784
+        }
+      },
+      {
+        "target": -115.0,
+        "params": {
+          "charging_number": 9.089044994630349,
+          "current1": 5.6343523091728365,
+          "current2": 1.0821627795937785
+        }
+      },
+      {
+        "target": -46.0,
+        "params": {
+          "charging_number": 12.516807615286666,
+          "current1": 5.369635605078077,
+          "current2": 3.323340706285862
+        }
+      },
+      {
+        "target": -80.0,
+        "params": {
+          "charging_number": 15.645958406348345,
+          "current1": 5.362152026408754,
+          "current2": 1.5246993243422438
+        }
+      },
+      {
+        "target": -48.0,
+        "params": {
+          "charging_number": 16.916888901253042,
+          "current1": 3.783074724902005,
+          "current2": 3.240186868051262
+        }
+      },
+      {
+        "target": -40.0,
+        "params": {
+          "charging_number": 13.836224915215878,
+          "current1": 4.921109372580706,
+          "current2": 4.0
+        }
+      },
+      {
+        "target": -44.0,
+        "params": {
+          "charging_number": 6.451279971436654,
+          "current1": 3.0,
+          "current2": 4.0
+        }
+      },
+      {
+        "target": -52.0,
+        "params": {
+          "charging_number": 20.622049067769456,
+          "current1": 6.0,
+          "current2": 4.0
+        }
+      },
+      {
+        "target": -48.0,
+        "params": {
+          "charging_number": 23.360528494191694,
+          "current1": 3.0,
+          "current2": 4.0
+        }
+      },
+      {
+        "target": -66.0,
+        "params": {
+          "charging_number": 24.599707968729422,
+          "current1": 6.0,
+          "current2": 1.8205952014953621
+        }
+      },
+      {
+        "target": -91.0,
+        "params": {
+          "charging_number": 21.006715079086945,
+          "current1": 3.0,
+          "current2": 1.3795295698380443
+        }
+      },
+      {
+        "target": -50.0,
+        "params": {
+          "charging_number": 16.972141947132467,
+          "current1": 6.0,
+          "current2": 4.0
+        }
+      }
+    ]
+  },
+  "llmbo": {
+    "method": "LLMBO",
+    "llm_model": "gpt-3.5-turbo",
+    "init_points": 5,
+    "n_iter": 10,
+    "total_evaluations": 15,
+    "total_time": 554.8198039531708,
+    "best_target": -40.0,
+    "best_params": {
+      "charging_number": 6.888000218970204,
+      "current1": 5.2675573627472545,
+      "current2": 4.0
+    },
+    "all_results": [
+      {
+        "target": -56.0,
+        "params": {
+          "charging_number": 15.0,
+          "current1": 4.0,
+          "current2": 2.5
+        }
+      },
+      {
+        "target": -80.0,
+        "params": {
+          "charging_number": 20.0,
+          "current1": 3.5,
+          "current2": 1.5
+        }
+      },
+      {
+        "target": -47.0,
+        "params": {
+          "charging_number": 10.0,
+          "current1": 5.5,
+          "current2": 3.2
+        }
+      },
+      {
+        "target": -61.0,
+        "params": {
+          "charging_number": 18.0,
+          "current1": 4.7,
+          "current2": 1.8
+        }
+      },
+      {
+        "target": -64.0,
+        "params": {
+          "charging_number": 12.0,
+          "current1": 5.0,
+          "current2": 2.0
+        }
+      },
+      {
+        "target": -46.0,
+        "params": {
+          "charging_number": 12.516807615286666,
+          "current1": 5.369635605078077,
+          "current2": 3.323340706285862
+        }
+      },
+      {
+        "target": -80.0,
+        "params": {
+          "charging_number": 15.645958406348345,
+          "current1": 5.362152026408754,
+          "current2": 1.5246993243422438
+        }
+      },
+      {
+        "target": -48.0,
+        "params": {
+          "charging_number": 16.916888901253042,
+          "current1": 3.783074724902005,
+          "current2": 3.240186868051262
+        }
+      },
+      {
+        "target": -45.0,
+        "params": {
+          "charging_number": 9.550297360093388,
+          "current1": 3.4667699921646524,
+          "current2": 3.8419103532315018
+        }
+      },
+      {
+        "target": -73.0,
+        "params": {
+          "charging_number": 19.525121037624405,
+          "current1": 5.185836041552076,
+          "current2": 1.5840640947468256
+        }
+      },
+      {
+        "target": -41.0,
+        "params": {
+          "charging_number": 11.128377072294999,
+          "current1": 4.410569742312935,
+          "current2": 4.0
+        }
+      },
+      {
+        "target": -45.0,
+        "params": {
+          "charging_number": 13.099696092985646,
+          "current1": 3.0,
+          "current2": 4.0
+        }
+      },
+      {
+        "target": -40.0,
+        "params": {
+          "charging_number": 6.888000218970204,
+          "current1": 5.2675573627472545,
+          "current2": 4.0
+        }
+      },
+      {
+        "target": -43.0,
+        "params": {
+          "charging_number": 5.459273516202458,
+          "current1": 3.0,
+          "current2": 4.0
+        }
+      },
+      {
+        "target": -83.0,
+        "params": {
+          "charging_number": 5.0,
+          "current1": 5.266232987331901,
+          "current2": 1.7231541475623604
+        }
+      }
+    ]
+  },
+  "comparison": {
+    "init_improvement": 31.249999999999993,
+    "final_improvement": 0.0,
+    "bo_best_iter": 9,
+    "llmbo_best_iter": 13
+  }
+}
