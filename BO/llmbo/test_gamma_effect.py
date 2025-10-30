@@ -8,7 +8,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np
 from sklearn.gaussian_process import GaussianProcessRegressor
-from llmbo.enhanced_kernel import LLMEnhancedKernel, get_llm_kernel_config
+from llmbo.enhanced_kernel_v3 import LLMEnhancedKernelV3, get_llm_kernel_config_v3
 
 print("="*70)
 print("测试：动态γ是否影响GP预测")
@@ -30,8 +30,8 @@ print(f"训练数据: {X_train.shape[0]} 个点")
 # 2. 创建LLM增强核函数
 print("\n步骤2: 创建LLM增强核函数")
 print("-"*70)
-config = get_llm_kernel_config()
-kernel = LLMEnhancedKernel(
+config = get_llm_kernel_config_v3()
+kernel = LLMEnhancedKernelV3(
     length_scales=config['length_scales'],
     coupling_matrix=config['coupling_matrix'],
     coupling_strength=0.3  # 初始γ=0.3
